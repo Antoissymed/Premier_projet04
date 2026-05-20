@@ -3,10 +3,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 
-# SQLite - pas de mot de passe, pas besoin d'admin
-DATABASE_URL = "sqlite:///./predictions.db"
+# 🔵 POSTGRESQL (remplace SQLite)
+DATABASE_URL = "postgresql://postgres:Akram29081308@localhost:5432/ml_project"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -20,9 +20,34 @@ class Prediction(Base):
     confidence = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
 def init_db():
+    """Initialise la base de données PostgreSQL"""
     Base.metadata.create_all(bind=engine)
-    print("✅ Base de données SQLite créée avec succès!")
+    print("✅ Base de données PostgreSQL créée avec succès!")
+
+
+def save_prediction(input_text: str, prediction: int, label: str, confidence: float):
+    """Enregistre une prédiction dans PostgreSQL"""
+    db = SessionLocal()
+    try:
+        record = Prediction(
+            input_text=input_text,
+            prediction=prediction,
+            prediction_label=label,
+            confidence=confidence
+        )
+        db.add(record)
+        db.commit()
+        print(f"✅ Prédiction enregistrée dans PostgreSQL (id: {record.id})")
+        return record.id
+    except Exception as e:
+        print(f"❌ Erreur PostgreSQL: {e}")
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
 
 if __name__ == "__main__":
     init_db()
