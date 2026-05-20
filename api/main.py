@@ -1,9 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
 import joblib
 import os
 import pandas as pd
+from sqlalchemy.orm import Session
+
+# Import de la base de données
+from src.database import SessionLocal, init_db, Prediction
+import json
 
 app = FastAPI(
     title="API de Prédiction - Départ des employés",
@@ -86,7 +91,22 @@ class PredictionOutput(BaseModel):
     prediction_label: str
     confidence: float
 
+class PredictionRecord(BaseModel):
+    id: int
+    prediction: int
+    prediction_label: str
+    confidence: float
+    created_at: str
+
 model = None
+
+# Dépendance pour obtenir une session BDD
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def preprocess_input(data):
     data["eval_number"] = int(data["eval_number"].replace("E_", ""))
@@ -111,6 +131,8 @@ def preprocess_input(data):
 @app.on_event("startup")
 async def startup_event():
     global model
+    # Initialiser la base de données au démarrage
+    init_db()
     if os.path.exists(MODEL_PATH):
         model = joblib.load(MODEL_PATH)
         print("Modèle chargé")
@@ -133,7 +155,7 @@ def health_check():
     }
 
 @app.post("/predict", response_model=PredictionOutput)
-def predict(input_data: EmployeeInput):
+def predict(input_data: EmployeeInput, db: Session = Depends(get_db)):
     if model is None:
         raise HTTPException(status_code=500, detail="Modèle non chargé")
     try:
@@ -146,6 +168,19 @@ def predict(input_data: EmployeeInput):
         else:
             conf = 0.0
         label = "Va partir" if int(pred) == 1 else "Ne partira pas"
+
+        # --- Enregistrement en base de données ---
+        record = Prediction(
+            input_text=json.dumps(data, ensure_ascii=False),
+            prediction=int(pred),
+            prediction_label=label,
+            confidence=conf
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        # -----------------------------------------
+
         return PredictionOutput(
             input_data=data,
             prediction=int(pred),
@@ -153,7 +188,23 @@ def predict(input_data: EmployeeInput):
             confidence=conf
         )
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/predictions", response_model=List[PredictionRecord])
+def get_predictions(limit: int = 50, db: Session = Depends(get_db)):
+    """Retourne l'historique des prédictions enregistrées en base."""
+    records = db.query(Prediction).order_by(Prediction.created_at.desc()).limit(limit).all()
+    return [
+        PredictionRecord(
+            id=r.id,
+            prediction=r.prediction,
+            prediction_label=r.prediction_label,
+            confidence=r.confidence,
+            created_at=str(r.created_at)
+        )
+        for r in records
+    ]
 
 if __name__ == "__main__":
     import uvicorn
