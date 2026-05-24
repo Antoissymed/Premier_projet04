@@ -2,9 +2,21 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+from dotenv import load_dotenv
+import os
 
-# 🔵 POSTGRESQL (remplace SQLite)
-DATABASE_URL = "postgresql://postgres:Akram29081308@localhost:5432/ml_project"
+# Charger le .env EN PREMIER
+load_dotenv()
+
+# Lire les variables depuis .env
+DB_PASSWORD = os.getenv('MOTDEPASSE')
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME', 'ml_project')
+
+# Construire l'URL avec les variables
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
