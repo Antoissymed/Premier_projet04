@@ -1,11 +1,22 @@
 import pandas as pd
 from sqlalchemy import create_engine
 from urllib.parse import quote_plus
+from dotenv import load_dotenv
+import os
+
+# Charger le .env
+load_dotenv()
+
+# Lire les variables depuis .env
+DB_PASSWORD = quote_plus(os.getenv('MOTDEPASSE', ''))
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME', 'ml_project')
 
 # Connexion PostgreSQL
-password = quote_plus("postgres123")
 engine = create_engine(
-    f"postgresql+pg8000://postgres:{password}@localhost:5432/ml_project"
+    f"postgresql+pg8000://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
 # Lire le CSV
